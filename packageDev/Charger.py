@@ -1,7 +1,7 @@
 import stanfordnlp
 from cube.api import Cube
-import packageModules.Indicators
-from packageModules.Transformer import Transformer
+from packageModules.Indicators import Indicators
+from packageModules.Transformer import Processor, ModelAdapter
 
 
 '''
@@ -17,6 +17,7 @@ class NLPCharger:
         self.lang = language
         self.lib = library
         self.text = text
+        self.textwithparagraphs = None
         self.parser = None
 
     '''
@@ -26,7 +27,7 @@ class NLPCharger:
         if self.lib.lower() == "stanford":
             print("-----------You are going to use Stanford library-----------")
             if self.lang.lower() == "basque":
-                print("-----------You are going to use Basque model-----------")
+                print("-------------You are going to use Basque model-------------")
                 # MODELS_DIR = '/home/edercarbajo/eu'
                 MODELS_DIR = 'J:\TextSimilarity\eu'
                 stanfordnlp.download('eu', MODELS_DIR)  # Download the Basque models
@@ -51,16 +52,6 @@ class NLPCharger:
                           'depparse_pretrain_path': 'J:\TextSimilarity\eu\eu_bdt_models\eu_bdt.pretrain.pt'
                           }
                 self.parser = stanfordnlp.Pipeline(**config)
-
-                #parser = stanfordnlp.Pipeline()
-
-                doc = self.parser(self.text)
-                # for sent in doc.sentences:
-                #     for word in sent.words:
-                #         print(str(
-                #             word.index) + "\t" + word.text + "\t" + word.lemma + "\t" + word.upos + "\t" + word.xpos +
-                #             "\t" + word.feats + "\t" + str(
-                #             word.governor) + "\t" + str(word.dependency_relation) + "\n")
             else:
                 print("............Working...........")
         elif self.lib.lower() == "cube":
@@ -68,28 +59,30 @@ class NLPCharger:
             if self.lang.lower() == "basque":
                 cube = Cube(verbose=True)
                 cube.load("eu", "latest")
-                sequences = cube(self.text)
-                for sequence in sequences:
-                    for entry in sequence:
-                        print(str(
-                            entry.index) + "\t" + entry.word + "\t" + entry.lemma + "\t" + entry.upos + "\t" +
-                              entry.xpos + "\t" + entry.attrs + "\t" + str(entry.head) + "\t" + str(entry.label) +
-                              "\t" + entry.space_after)
+                self.parser = cube
             else:
                 print("............Working...........")
         else:
             print("You cannot use this library. Introduce a valid library (Cube or Stanford)")
 
     '''
-    Transform the data into a unified structure.
+    Transform data into a unified structure.
     '''
     def get_estructure(self):
-        tf = Transformer(self.text, self.lib.lower())
-        tf.get_paragraph()
+        tf = Processor(self.lib.lower())
 
+        #Loading a text with paragraphs
+        self.textwithparagraphs = tf.process_text(self.text)
 
-prueba = NLPCharger("basque", "stanford", "Kepa hondartzan egon da.\nHurrengo astean mendira joango da. \n\nBere"
-                                          " lagunak saskibaloi partidu bat antolatu dute 18etan, baina berak "
-                                          "ez du jolastuko.")
-prueba.download_model()
-prueba.get_estructure()
+        #Getting a unified structure [ [sentences], [sentences], ...]
+        return self.adapt_nlp_model()
+
+    def adapt_nlp_model(self):
+        ma = ModelAdapter(self.parser, self.lib)
+        return ma.model_analysis(self.textwithparagraphs)
+
+    def get_indicators(self, struc):
+        ind = Indicators(self.lang, struc)
+        print(ind.calculate_num_words())
+        print(ind.calculate_num_paragraphs())
+        print(ind.calculate_num_sentences())
