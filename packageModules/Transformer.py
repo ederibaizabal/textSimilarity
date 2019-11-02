@@ -50,6 +50,7 @@ class ModelAdapter:
                         print(sequence)
                         s = Sentence()
                         s.text = sequence
+                        s.word_list = []
                         for word in sent.words:
                             #Por cada palabra de cada sentencia, creamos un objeto Word que contendra los attrs
                             w = Word()
@@ -74,6 +75,7 @@ class ModelAdapter:
                     sequence = self.sent2sequenceCube(seq)
                     s = Sentence()
                     s.text = sequence
+                    s.word_list = []
                     for entry in seq:
                         # Por cada palabra de cada sentencia, creamos un objeto Word que contendra los attrs
                         w = Word()

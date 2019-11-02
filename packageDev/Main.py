@@ -13,7 +13,7 @@ class Main(object):
         return Main.__instance
 
     def start(self):
-        prueba = NLPCharger("basque", "cube", "Kepa hondartzan egon da. Eguraldi oso ona egin zuen.\nHurrengo astean mendira joango da. \n\nBere"
+        prueba = NLPCharger("basque", "stanford", "Kepa hondartzan egon da. Eguraldi oso ona egin zuen.\nHurrengo astean mendira joango da. \n\nBere"
                                           " lagunak saskibaloi partidu bat antolatu dute 18etan, baina berak "
                                           "ez du jolastuko.")
         prueba.download_model()

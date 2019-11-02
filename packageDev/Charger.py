@@ -1,8 +1,8 @@
 import stanfordnlp
 from cube.api import Cube
-from packageModules.Indicators import Indicators
+from packageModules.Analyzer import Analyzer
 from packageModules.Transformer import Processor, ModelAdapter
-
+from packageDev.Printer import Printer
 
 '''
 The aim of this class is the charge of the model with the specific language and nlp library.
@@ -82,7 +82,7 @@ class NLPCharger:
         return ma.model_analysis(self.textwithparagraphs)
 
     def get_indicators(self, struc):
-        ind = Indicators(self.lang, struc)
-        print(ind.calculate_num_words())
-        print(ind.calculate_num_paragraphs())
-        print(ind.calculate_num_sentences())
+        ind = Analyzer(self.lang, struc)
+        indicators = ind.analyze()
+        printer = Printer(indicators)
+        printer.print_info()
