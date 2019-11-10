@@ -1,10 +1,11 @@
 "This is a Singleton class which is going to start necessary classes and methods."
 
 from packageDev.Charger import NLPCharger
-import re
+from packageDev.Printer import Printer
+
 
 class Main(object):
-
+    # _instance es un atributo que conoce el Singleton
     __instance = None
 
     def __new__(cls):
@@ -13,12 +14,17 @@ class Main(object):
         return Main.__instance
 
     def start(self):
-        prueba = NLPCharger("basque", "stanford", "Kepa hondartzan egon da. Eguraldi oso ona egin zuen.\nHurrengo astean mendira joango da. \n\nBere"
-                                          " lagunak saskibaloi partidu bat antolatu dute 18etan, baina berak "
-                                          "ez du jolastuko.")
-        prueba.download_model()
-        struc = prueba.get_estructure()
-        prueba.get_indicators(struc)
+        cargador = NLPCharger("basque", "stanford")
+        #cargador.download_model()
+        cargador.load_model()
+
+        text = "Kepa hondartzan egon da. Eguraldi oso ona egin zuen.\nHurrengo astean mendira joango da. " \
+               "\n\nBere lagunak saskibaloi partidu bat antolatu dute 18etan, baina berak ez du jolastuko."
+
+        document = cargador.get_estructure(text)
+        indicators = document.get_indicators()
+        printer = Printer(indicators)
+        printer.print_info()
 
 
 main = Main()
