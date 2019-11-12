@@ -19,7 +19,9 @@ class Main(object):
         cargador.load_model()
 
         text = "Kepa hondartzan egon da. Eguraldi oso ona egin zuen.\nHurrengo astean mendira joango da. " \
-               "\n\nBere lagunak saskibaloi partidu bat antolatu dute 18etan, baina berak ez du jolastuko."
+               "\n\nBere lagunak saskibaloi partidu bat antolatu dute 18etan, baina berak ez du jolastuko. \n " \
+               "Etor zaitez etxera.\n Nik egin beharko nuke lan hori. \n Gizonak liburua galdu du. \n Irten hortik!" \
+                   "\n Emadazu ur botila!"
 
         document = cargador.get_estructure(text)
         indicators = document.get_indicators()

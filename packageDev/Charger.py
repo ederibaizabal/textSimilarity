@@ -1,6 +1,5 @@
 import stanfordnlp
 from cube.api import Cube
-from packageModules.Analyzer import Analyzer
 from packageModules.Transformer import ModelAdapter
 from packageDev.Printer import Printer
 import re

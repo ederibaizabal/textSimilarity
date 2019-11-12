@@ -1,9 +1,4 @@
-import stanfordnlp
-from cube.api import Cube
-
-from nltk import sent_tokenize
 import numpy as np
-from packageModules.Analyzer import Analyzer
 from collections import defaultdict
 
 '''
@@ -45,6 +40,8 @@ class ModelAdapter:
                             w.governor = word.governor
                             w.dependency_relation = word.dependency_relation
                             s.word_list.append(w)
+                            print(str(
+                                word.index) + "\t" + word.text + "\t" + word.lemma + "\t" + word.upos + "\t" + word.xpos + "\t" + word.feats + "\t")
                         p.sentence_list.append(s)
                     d.paragraph_list.append(p)
 
@@ -52,13 +49,11 @@ class ModelAdapter:
             lines = text.split('@')
             for line in lines:
                 p = Paragraph()
-                p.sentence_list = []
                 sequences = self.model(line)
                 for seq in sequences:
                     s = Sentence()
                     sequence = self.sent2sequenceCube(seq)
                     s.text = sequence
-                    s.word_list = []
                     for entry in seq:
                         # Por cada palabra de cada sentencia, creamos un objeto Word que contendra los attrs
                         w = Word()
@@ -70,6 +65,8 @@ class ModelAdapter:
                         w.feats = entry.attrs
                         w.governor = str(entry.head)
                         w.dependency_relation = str(entry.label)
+                        print(str(
+                            w.index) + "\t" + w.text + "\t" + w.lemma + "\t" + w.upos + "\t" + w.xpos + "\t" + w.feats + "\t")
                         s.word_list.append(w)
                     p.sentence_list.append(s)
                 d.paragraph_list.append(p)
@@ -93,8 +90,7 @@ class Document:
         self._text = text
         self._paragraph_list = []
         # Indicadores
-        self.analyzer = Analyzer()
-        self.indicators = self.analyzer.indicators
+        self.indicators = defaultdict(float)
         self.aux_lists = defaultdict(list)
 
     @property
@@ -121,8 +117,10 @@ class Document:
         self.indicators['num_sentences'] = self.calculate_num_sentences()
         self.indicators['num_words'] = self.calculate_num_words()
         self.indicators['num_paragraphs'] = self.calculate_num_paragraphs()
+        self.analyze_iterator()
         self.calculate_all_means()
         self.calculate_all_std_deviations()
+        self.calculate_all_incidence()
         return self.indicators
 
     def calculate_num_words(self):
@@ -151,6 +149,23 @@ class Document:
                 num_sentences += 1
         return num_sentences
 
+    def analyze_iterator(self):
+        i = self.indicators
+        for p in self.paragraph_list:
+            for s in p.sentence_list:
+                for w in s.word_list:
+                    atributos = w.feats.split('|')
+                    if 'Mood=Imp' in atributos:
+                        i['num_impera'] += 1
+                    if 'PronType=Prs' in atributos:
+                        i['num_personal_pronouns'] += 1
+                        if 'Person=1' in atributos:
+                            i['num_first_pers_pron'] += 1
+                            if 'Number=Sing' in atributos:
+                                i['num_first_pers_sing_pron'] += 1
+                        elif 'Person=3' in atributos:
+                            i['num_third_pers_pron'] += 1
+
     def calculate_all_means(self):
         i = self.indicators
         i['sentences_per_paragraph_mean'] = round(float(np.mean(self.aux_lists['sentences_per_paragraph'])), 4)
@@ -164,6 +179,18 @@ class Document:
         i['sentences_length_std'] = round(float(np.std(self.aux_lists['sentences_length_mean'])), 4)
         i['words_length_std'] = round(float(np.std(self.aux_lists['words_length_list'])), 4)
         i['lemmas_length_std'] = round(float(np.std(self.aux_lists['lemmas_length_list'])), 4)
+
+    @staticmethod
+    def get_incidence(indicador, num_words):
+        return round(((1000 * indicador) / num_words), 4)
+
+    def calculate_all_incidence(self):
+        i = self.indicators
+        i['num_impera_incidence'] = self.get_incidence(i['num_impera'], i['num_words'])
+        i['num_personal_pronouns_incidence'] = self.get_incidence(i['num_personal_pronouns'], i['num_words'])
+        i['num_first_pers_pron_incidence'] = self.get_incidence(i['num_first_pers_pron'], i['num_words'])
+        i['num_first_pers_sing_pron_incidence'] = self.get_incidence(i['num_first_pers_sing_pron'], i['num_words'])
+        i['num_third_pers_pron_incidence'] = self.get_incidence(i['num_third_pers_pron'], i['num_words'])
 
 
 class Paragraph:
@@ -313,6 +340,12 @@ class Word:
     def index(self, value):
         """ Set the word's index value. """
         self._index = value
+
+    # def is_lexic_word(self, entry, sequence):
+    #     return self.is_verb(entry, sequence) or entry.upos == 'NOUN' or entry.upos == 'ADJ' or entry.upos == 'ADV'
+    #
+    # def is_verb(self, word, sequence):
+    #     return word.upos == 'VERB' or (word.upos == 'AUX' and sequence[word.governor - 1].upos != 'VERB')
 
     def __repr__(self):
         features = ['index', 'text', 'lemma', 'upos', 'xpos', 'feats', 'governor', 'dependency_relation']
