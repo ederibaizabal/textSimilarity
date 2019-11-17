@@ -41,7 +41,9 @@ class ModelAdapter:
                             w.dependency_relation = word.dependency_relation
                             s.word_list.append(w)
                             print(str(
-                                word.index) + "\t" + word.text + "\t" + word.lemma + "\t" + word.upos + "\t" + word.xpos + "\t" + word.feats + "\t")
+                                w.index) + "\t" + w.text + "\t" + w.lemma + "\t" + w.upos + "\t" +
+                                  w.xpos + "\t" + w.feats + "\t" + str(w.governor) + "\t" + str(w.dependency_relation) +
+                                  "\t")
                         p.sentence_list.append(s)
                     d.paragraph_list.append(p)
 
@@ -89,6 +91,7 @@ class Document:
     def __init__(self, text):
         self._text = text
         self._paragraph_list = []
+        self.words_freq = {}
         # Indicadores
         self.indicators = defaultdict(float)
         self.aux_lists = defaultdict(list)
@@ -117,10 +120,11 @@ class Document:
         self.indicators['num_sentences'] = self.calculate_num_sentences()
         self.indicators['num_words'] = self.calculate_num_words()
         self.indicators['num_paragraphs'] = self.calculate_num_paragraphs()
-        self.analyze_iterator()
+        self.analyze()
         self.calculate_all_means()
         self.calculate_all_std_deviations()
         self.calculate_all_incidence()
+        self.calculate_density()
         return self.indicators
 
     def calculate_num_words(self):
@@ -149,12 +153,122 @@ class Document:
                 num_sentences += 1
         return num_sentences
 
-    def analyze_iterator(self):
+    def calculate_left_embeddedness(self, sequences):
+        list_left_embeddedness = []
+        for sequence in sequences:
+            verb_index = 0
+            main_verb_found = False
+            left_embeddedness = 0
+            num_words = 0
+            for word in sequence.word_list:
+                if not len(word.text) == 1 or word.text.isalpha():
+                    if not main_verb_found and word.governor < len(sequence.word_list):
+                        if self.is_verb(word, sequence):
+                            verb_index += 1
+                            if (word.upos == 'VERB' and word.dependency_relation == 'root') or (
+                                    word.upos == 'AUX' and sequence.word_list[word.governor].dependency_relation == 'root'
+                                    and sequence.word_list[word.governor].upos == 'VERB'):
+                                main_verb_found = True
+                                left_embeddedness = num_words
+                            if verb_index == 1:
+                                left_embeddedness = num_words
+                    num_words += 1
+            list_left_embeddedness.append(left_embeddedness)
+        self.indicators['left_embeddedness'] = round(float(np.mean(list_left_embeddedness)), 4)
+
+    def count_np_in_sentence(self, sentence):
+        list_np_indexes = []
+        for word in sentence.word_list:
+            if word.upos == 'NOUN' or word.upos == 'PRON' or word.upos == 'PROPN':
+                if word.dependency_relation in ['fixed', 'flat', 'compound']:
+                    if word.governor not in list_np_indexes:
+                        list_np_indexes.append(word.governor)
+                else:
+                    if word.index not in list_np_indexes:
+                        list_np_indexes.append(word.index)
+        return list_np_indexes
+
+    def is_verb(self, word, sequence):
+        return word.upos == 'VERB' or (word.upos == 'AUX' and sequence.word_list[word.governor - 1].upos != 'VERB')
+
+    def is_lexic_word(self, entry, sequence):
+        return self.is_verb(entry, sequence) or entry.upos == 'NOUN' or entry.upos == 'ADJ' or entry.upos == 'ADV'
+
+    def count_decendents(self, sentence, list_np_indexes):
+        num_modifiers = 0
+        if len(list_np_indexes) == 0:
+            return num_modifiers
+        else:
+            new_list_indexes = []
+            for entry in sentence.word_list:
+                if entry.governor in list_np_indexes and entry.has_modifier():
+                    new_list_indexes.append(entry.index)
+                    num_modifiers += 1
+            return num_modifiers + self.count_decendents(sentence, new_list_indexes)
+
+    def get_num_hapax_legomena(self):
+        num_hapax_legonema = 0
+        for word, frecuencia in self.words_freq.items():
+            if frecuencia == 1:
+                num_hapax_legonema += 1
+        return num_hapax_legonema
+
+    def calculate_honore(self):
+        n = self.indicators['num_words']
+        v = len(self.aux_lists['different_forms'])
+        v1 = self.get_num_hapax_legomena()
+        self.indicators['honore'] = round(100 * ((np.log10(n)) / (1 - (v1 / v))), 4)
+
+    def calculate_maas(self):
+        n = self.indicators['num_words']
+        v = len(self.aux_lists['different_forms'])
+        self.indicators['maas'] = round((np.log10(n) - np.log10(v)) / (np.log10(v) ** 2), 4)
+
+    def analyze(self):
         i = self.indicators
+        # num_np_list = []
+        # decendents_total = 0
+        subordinadas_labels = ['csubj', 'csubj:pass', 'ccomp', 'xcomp', 'advcl', 'acl', 'acl:relcl']
+
         for p in self.paragraph_list:
+            self.calculate_left_embeddedness(p.sentence_list)
             for s in p.sentence_list:
+                # vp_indexes = self.count_np_in_sentence(s)
+                # num_np_list.append(len(vp_indexes))
+                # decendents_total += self.count_decendents(s, vp_indexes)
+                i['prop'] = 0
+                numPunct = 0
                 for w in s.word_list:
+                    if self.is_lexic_word(w, s):
+                        i['num_lexic_words'] += 1
+                    if w.upos == 'NOUN':
+                        i['num_noun'] += 1
+                    if w.upos == 'ADJ':
+                        i['num_adj'] += 1
+                    if w.upos == 'ADV':
+                        i['num_adv'] += 1
+                    if self.is_verb(w, s):
+                        i['num_verb'] += 1
+                    if w.text.lower() not in self.aux_lists['different_forms']:
+                        self.aux_lists['different_forms'].append(w.text.lower())
+                    if w.text.lower() not in self.words_freq:
+                        self.words_freq[w.text.lower()] = 1
+                    else:
+                        self.words_freq[w.text.lower()] = self.words_freq.get(w.text.lower()) + 1
+                    if w.dependency_relation in subordinadas_labels:
+                        i['num_subord'] += 1
+                        # Numero de sentencias subordinadas relativas
+                        if w.dependency_relation == 'acl:relcl':
+                            i['num_rel_subord'] += 1
+                    if w.upos == 'PUNCT':
+                        numPunct += 1
+                    if w.dependency_relation == 'conj' or w.dependency_relation == 'csubj' or w.dependency_relation == 'csubj:pass' or w.dependency_relation == 'ccomp' or w.dependency_relation == 'xcomp' or w.dependency_relation == 'advcl' or w.dependency_relation == 'acl' or w.dependency_relation == 'acl:relcl':
+                        i['prop'] += 1
                     atributos = w.feats.split('|')
+                    if 'VerbForm=Ger' in atributos:
+                        i['num_ger'] += 1
+                    if 'VerbForm=Inf' in atributos:
+                        i['num_inf'] += 1
                     if 'Mood=Imp' in atributos:
                         i['num_impera'] += 1
                     if 'PronType=Prs' in atributos:
@@ -165,6 +279,13 @@ class Document:
                                 i['num_first_pers_sing_pron'] += 1
                         elif 'Person=3' in atributos:
                             i['num_third_pers_pron'] += 1
+                i['num_total_prop'] = i['num_total_prop'] + i['prop']
+                self.aux_lists['prop_per_sentence'].append(i['prop'])
+                self.aux_lists['punct_per_sentence'].append(numPunct)
+        # i['num_decendents_noun_phrase'] = round(decendents_total / sum(num_np_list), 4)
+        i['num_different_forms'] = len(self.aux_lists['different_forms'])
+        self.calculate_honore()
+        self.calculate_maas()
 
     def calculate_all_means(self):
         i = self.indicators
@@ -172,6 +293,8 @@ class Document:
         i['sentences_length_mean'] = round(float(np.mean(self.aux_lists['sentences_length_mean'])), 4)
         i['words_length_mean'] = round(float(np.mean(self.aux_lists['words_length_list'])), 4)
         i['lemmas_length_mean'] = round(float(np.mean(self.aux_lists['lemmas_length_list'])), 4)
+        i['mean_propositions_per_sentence'] = round(float(np.mean(self.aux_lists['prop_per_sentence'])), 4)
+        i['num_punct_marks_per_sentence'] = round(float(np.mean(self.aux_lists['punct_per_sentence'])), 4)
 
     def calculate_all_std_deviations(self):
         i = self.indicators
@@ -186,11 +309,26 @@ class Document:
 
     def calculate_all_incidence(self):
         i = self.indicators
-        i['num_impera_incidence'] = self.get_incidence(i['num_impera'], i['num_words'])
-        i['num_personal_pronouns_incidence'] = self.get_incidence(i['num_personal_pronouns'], i['num_words'])
-        i['num_first_pers_pron_incidence'] = self.get_incidence(i['num_first_pers_pron'], i['num_words'])
-        i['num_first_pers_sing_pron_incidence'] = self.get_incidence(i['num_first_pers_sing_pron'], i['num_words'])
-        i['num_third_pers_pron_incidence'] = self.get_incidence(i['num_third_pers_pron'], i['num_words'])
+        n = i['num_words']
+        i['num_sentences_incidence'] = self.get_incidence(i['num_sentences'], n)
+        i['num_paragraphs_incidence'] = self.get_incidence(i['num_paragraphs'], n)
+        i['num_impera_incidence'] = self.get_incidence(i['num_impera'], n)
+        i['num_personal_pronouns_incidence'] = self.get_incidence(i['num_personal_pronouns'], n)
+        i['num_first_pers_pron_incidence'] = self.get_incidence(i['num_first_pers_pron'], n)
+        i['num_first_pers_sing_pron_incidence'] = self.get_incidence(i['num_first_pers_sing_pron'], n)
+        i['num_third_pers_pron_incidence'] = self.get_incidence(i['num_third_pers_pron'], n)
+        i['gerund_density_incidence'] = self.get_incidence(i['num_ger'], n)
+        i['infinitive_density_incidence'] = self.get_incidence(i['num_inf'], n)
+        i['num_subord_incidence'] = self.get_incidence(i['num_subord'], n)
+        i['num_rel_subord_incidence'] = self.get_incidence(i['num_rel_subord'], n)
+
+    def calculate_density(self):
+        i = self.indicators
+        i['lexical_density'] = round(i['num_lexic_words'] / i['num_words'], 4)
+        i['noun_density'] = round(i['num_noun'] / i['num_words'], 4)
+        i['verb_density'] = round(i['num_verb'] / i['num_words'], 4)
+        i['adj_density'] = round(i['num_adj'] / i['num_words'], 4)
+        i['adv_density'] = round(i['num_adv'] / i['num_words'], 4)
 
 
 class Paragraph:
@@ -341,11 +479,10 @@ class Word:
         """ Set the word's index value. """
         self._index = value
 
-    # def is_lexic_word(self, entry, sequence):
-    #     return self.is_verb(entry, sequence) or entry.upos == 'NOUN' or entry.upos == 'ADJ' or entry.upos == 'ADV'
-    #
-    # def is_verb(self, word, sequence):
-    #     return word.upos == 'VERB' or (word.upos == 'AUX' and sequence[word.governor - 1].upos != 'VERB')
+    def has_modifier(self):
+        # nominal head may be associated with different types of modifiers and function words
+        return True if self.dependency_relation in ['nmod', 'nmod:poss', 'appos', 'amod', 'nummod', 'acl', 'acl:relcl', 'det', 'clf',
+                                       'case'] else False
 
     def __repr__(self):
         features = ['index', 'text', 'lemma', 'upos', 'xpos', 'feats', 'governor', 'dependency_relation']
