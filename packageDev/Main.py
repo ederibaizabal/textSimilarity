@@ -14,14 +14,22 @@ class Main(object):
         return Main.__instance
 
     def start(self):
-        cargador = NLPCharger("basque", "stanford")
-        #cargador.download_model()
+        language = "basque"
+        model = "stanford"
+        cargador = NLPCharger(language, model)
+        cargador.download_model()
         cargador.load_model()
-
-        text = "Kepa hondartzan egon da. Eguraldi oso ona egin zuen.\nHurrengo astean mendira joango da. " \
-               "\n\nBere lagunak saskibaloi partidu bat antolatu dute 18etan, baina berak ez du jolastuko. \n " \
-               "Etor zaitez etxera.\n Nik egin beharko nuke lan hori. \n Gizonak liburua galdu du. \n Irten hortik!" \
+        if language == "basque":
+            text = "Kepa hondartzan egon da. Eguraldi oso ona egin zuen.\nHurrengo astean mendira joango da. " \
+                   "\n\nBere lagunak saskibaloi partidu bat antolatu dute 18etan, baina berak ez du jolastuko. \n " \
+                   "Etor zaitez etxera.\n Nik egin beharko nuke lan hori. \n Gizonak liburua galdu du. \n Irten hortik!" \
                    "\n Emadazu ur botila! \n Zu beti adarra jotzen."
+        if language == "english":
+            text = "Kepa is going to the beach. I am Kepa. \n" \
+                   "Eder is going too. He is Eder."
+        if language == "spanish":
+            text = "Kepa va ir a la playa. Yo soy Kepa. \n" \
+                   "Ibon tambien va a ir. El es Ibon."
 
         document = cargador.get_estructure(text)
         indicators = document.get_indicators()

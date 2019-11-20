@@ -185,7 +185,8 @@ class Document:
                         list_np_indexes.append(word.governor)
                 else:
                     if word.index not in list_np_indexes:
-                        list_np_indexes.append(word.index)
+                        ind = int(word.index)
+                        list_np_indexes.append(ind)
         return list_np_indexes
 
     def is_verb(self, word, sequence):
@@ -193,6 +194,16 @@ class Document:
 
     def is_lexic_word(self, entry, sequence):
         return self.is_verb(entry, sequence) or entry.upos == 'NOUN' or entry.upos == 'ADJ' or entry.upos == 'ADV'
+
+    def count_modifiers(self, sentence, list_np_indexes):
+        num_modifiers_per_np = []
+        for index in list_np_indexes:
+            num_modifiers = 0
+            for entry in sentence.word_list:
+                if int(entry.governor) == int(index) and entry.has_modifier():
+                    num_modifiers += 1
+            num_modifiers_per_np.append(num_modifiers)
+        return num_modifiers_per_np
 
     def count_decendents(self, sentence, list_np_indexes):
         num_modifiers = 0
@@ -205,6 +216,13 @@ class Document:
                     new_list_indexes.append(entry.index)
                     num_modifiers += 1
             return num_modifiers + self.count_decendents(sentence, new_list_indexes)
+
+    def count_vp_in_sentence(self, sentence):
+        num_np = 0
+        for entry in sentence.word_list:
+            if self.is_verb(entry, sentence):
+                num_np += 1
+        return num_np
 
     def get_num_hapax_legomena(self):
         num_hapax_legonema = 0
@@ -226,16 +244,20 @@ class Document:
 
     def analyze(self):
         i = self.indicators
-        # num_np_list = []
-        # decendents_total = 0
+        num_np_list = []
+        num_vp_list = []
+        modifiers_per_np = []
         subordinadas_labels = ['csubj', 'csubj:pass', 'ccomp', 'xcomp', 'advcl', 'acl', 'acl:relcl']
+        decendents_total = 0
 
         for p in self.paragraph_list:
             self.calculate_left_embeddedness(p.sentence_list)
             for s in p.sentence_list:
-                # vp_indexes = self.count_np_in_sentence(s)
-                # num_np_list.append(len(vp_indexes))
-                # decendents_total += self.count_decendents(s, vp_indexes)
+                vp_indexes = self.count_np_in_sentence(s)
+                num_np_list.append(len(vp_indexes))
+                num_vp_list.append(self.count_vp_in_sentence(s))
+                decendents_total += self.count_decendents(s, vp_indexes)
+                modifiers_per_np += self.count_modifiers(s, vp_indexes)
                 i['prop'] = 0
                 numPunct = 0
                 for w in s.word_list:
@@ -282,10 +304,13 @@ class Document:
                 i['num_total_prop'] = i['num_total_prop'] + i['prop']
                 self.aux_lists['prop_per_sentence'].append(i['prop'])
                 self.aux_lists['punct_per_sentence'].append(numPunct)
-        # i['num_decendents_noun_phrase'] = round(decendents_total / sum(num_np_list), 4)
+
         i['num_different_forms'] = len(self.aux_lists['different_forms'])
         self.calculate_honore()
         self.calculate_maas()
+        i['num_decendents_noun_phrase'] = round(decendents_total / sum(num_np_list), 4)
+        i['num_modifiers_noun_phrase'] = round(float(np.mean(modifiers_per_np)), 4)
+        self.calculate_phrases(num_vp_list, num_np_list)
 
     def calculate_all_means(self):
         i = self.indicators
@@ -302,6 +327,13 @@ class Document:
         i['sentences_length_std'] = round(float(np.std(self.aux_lists['sentences_length_mean'])), 4)
         i['words_length_std'] = round(float(np.std(self.aux_lists['words_length_list'])), 4)
         i['lemmas_length_std'] = round(float(np.std(self.aux_lists['lemmas_length_list'])), 4)
+
+    def calculate_phrases(self, num_vp_list, num_np_list):
+        i = self.indicators
+        i['mean_vp_per_sentence'] = round(float(np.mean(num_vp_list)), 4)
+        i['mean_np_per_sentence'] = round(float(np.mean(num_np_list)), 4)
+        i['noun_phrase_density_incidence'] = self.get_incidence(sum(num_np_list), i['num_words'])
+        i['verb_phrase_density_incidence'] = self.get_incidence(sum(num_vp_list), i['num_words'])
 
     @staticmethod
     def get_incidence(indicador, num_words):
